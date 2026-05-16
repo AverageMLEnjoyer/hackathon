@@ -4,7 +4,7 @@ import re
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse, urlunparse
 from urllib.request import Request, urlopen
 
 from fastapi import FastAPI, HTTPException
@@ -73,26 +73,38 @@ def fetch_allowed_website(url: str) -> dict[str, str]:
     if parsed_url.scheme not in {"http", "https"}:
         return {"url": url, "content": "Skipped invalid website URL."}
 
-    request = Request(
-        url,
-        headers={"User-Agent": "HackathonTaxResearchBot/0.1"},
-        method="GET",
-    )
-
     try:
+        encoded_url = urlunparse(
+            parsed_url._replace(
+                path=quote(parsed_url.path, safe="/:%"),
+                query=quote(parsed_url.query, safe="=&?/:%"),
+            )
+        )
+        request = Request(
+            encoded_url,
+            headers={"User-Agent": "HackathonTaxResearchBot/0.1"},
+            method="GET",
+        )
         with urlopen(request, timeout=10) as response:
             content_type = response.headers.get("content-type", "")
             if "text/html" not in content_type:
                 return {"url": url, "content": "Skipped non-HTML response."}
             html = response.read().decode("utf-8", errors="ignore")
-    except (HTTPError, URLError, TimeoutError) as error:
+    except (HTTPError, URLError, TimeoutError, UnicodeError, ValueError) as error:
         return {"url": url, "content": f"Could not fetch this source: {error}"}
 
     return {"url": url, "content": extract_text_from_html(html)[:MAX_SITE_CHARS]}
 
 
+def safe_fetch_allowed_website(url: str) -> dict[str, str]:
+    try:
+        return fetch_allowed_website(url)
+    except Exception as error:
+        return {"url": url, "content": f"Skipped source after fetch error: {error}"}
+
+
 def build_source_context() -> tuple[str, list[str]]:
-    sources = [fetch_allowed_website(url) for url in ALLOWED_WEBSITES]
+    sources = [safe_fetch_allowed_website(url) for url in ALLOWED_WEBSITES]
     context = "\n\n".join(
         f"Source: {source['url']}\nContent: {source['content']}"
         for source in sources
@@ -260,6 +272,7 @@ def research_tax_incentives(payload: CompanyResearchRequest) -> dict[str, object
             raise HTTPException(status_code=400, detail=f"{field_name} cannot be empty.")
 
     prompt = build_gemini_prompt(payload)
+    print(prompt)
     source_context, sources = build_source_context()
     answer = call_gemini(prompt, source_context)
     return {"answer": answer, "sources": sources}
