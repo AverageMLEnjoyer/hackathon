@@ -51,15 +51,24 @@ export default function App() {
       });
 
       if (!response.ok) {
-        throw new Error(`API returned ${response.status}`);
+        let detail = `API returned ${response.status}`;
+        try {
+          const errorData = await response.json();
+          detail = errorData.detail ?? detail;
+        } catch {
+          // Keep the HTTP status fallback when the backend does not return JSON.
+        }
+        throw new Error(detail);
       }
 
       const data = await response.json();
       setAnswer(data.answer);
       setSources(data.sources ?? sources);
       setSubmitStatus('Gemini response');
-    } catch {
-      setSubmitStatus('Could not get a Gemini response');
+    } catch (error) {
+      setSubmitStatus(
+        error instanceof Error ? error.message : 'Could not get a Gemini response',
+      );
     }
   }
 
