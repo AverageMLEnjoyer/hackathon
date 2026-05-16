@@ -1,4 +1,3 @@
-<<<<<<< Updated upstream
 import json
 import os
 import re
@@ -8,26 +7,23 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
-=======
->>>>>>> Stashed changes
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Optional
-from google import genai
-from google.genai import types
-from load_sites import load_target_sites
+
+from .load_sites import load_target_sites
 
 
-<<<<<<< Updated upstream
-class EchoRequest(BaseModel):
-    text: str
+ALLOWED_WEBSITES = load_target_sites()
+MAX_SITE_CHARS = 6000
 
 
-class GeminiRequest(BaseModel):
-    topic: str
-    audience: str
-    goal: str
+class CompanyResearchRequest(BaseModel):
+    company_name: str
+    industry_type: str
+    zone_of_operating: str
+    address: str
+    parent_company_address: str | None = None
 
 
 class TextExtractor(HTMLParser):
@@ -47,14 +43,6 @@ class TextExtractor(HTMLParser):
     def handle_data(self, data: str) -> None:
         if self._skip_tag is None and data.strip():
             self.parts.append(data.strip())
-
-
-ALLOWED_WEBSITES = [
-    "https://react.dev/",
-    "https://fastapi.tiangolo.com/",
-    "https://ai.google.dev/",
-]
-MAX_SITE_CHARS = 6000
 
 
 def load_local_env() -> None:
@@ -78,15 +66,16 @@ def extract_text_from_html(html: str) -> str:
 
 
 def fetch_allowed_website(url: str) -> dict[str, str]:
-    parsed_url = urlparse(url)
-    allowed_hosts = {urlparse(allowed_url).netloc for allowed_url in ALLOWED_WEBSITES}
-
-    if parsed_url.netloc not in allowed_hosts:
+    if url not in ALLOWED_WEBSITES:
         raise ValueError(f"{url} is not in the allowed website list")
+
+    parsed_url = urlparse(url)
+    if parsed_url.scheme not in {"http", "https"}:
+        return {"url": url, "content": "Skipped invalid website URL."}
 
     request = Request(
         url,
-        headers={"User-Agent": "HackathonGeminiResearchBot/0.1"},
+        headers={"User-Agent": "HackathonTaxResearchBot/0.1"},
         method="GET",
     )
 
@@ -111,12 +100,63 @@ def build_source_context() -> tuple[str, list[str]]:
     return context, [source["url"] for source in sources]
 
 
+def build_gemini_prompt(payload: CompanyResearchRequest) -> str:
+    user_prompt = (
+        "Analyze the following organization and find applicable green or marine "
+        "tax benefits:\n"
+        f"- Organization Name: {payload.company_name}\n"
+        f"- Industry Type: {payload.industry_type}\n"
+        f"- Zone of Operating: {payload.zone_of_operating}\n"
+        f"- Registered Address: {payload.address}\n"
+    )
+
+    if payload.parent_company_address:
+        user_prompt += (
+            "- Note: This is a subsidiary company. Parent company location: "
+            f"{payload.parent_company_address}\n"
+        )
+
+    user_prompt += (
+        "\nFind applicable tax incentives, subsidies, grants, or tax deductions "
+        "in marine sustainability for this entity."
+    )
+
+    return f"""
+You are a leading expert in international tax law, green subsidies, and
+environmental grants. Your task is to identify tax incentives, subsidies,
+grants, or tax deductions specifically in the field of marine sustainability
+(blue economy, ocean protection, sustainable aquaculture, eco-shipping) for the
+provided organization.
+
+Search rules:
+1. Use only the allowed website excerpts provided by the backend.
+2. Do not use outside knowledge, general web search, or sources outside the
+   allowed websites list.
+3. Focus on legislation, local/federal policies, and incentives of the country
+   and region where the company operates.
+
+The output must contain:
+- A structured list of available support programs or tax deductions matching the
+  company's industry.
+- Direct references or source links from the allowed websites, if found.
+- Step-by-step basic eligibility criteria for the company to qualify.
+
+If no specific incentives are found for this region in the allowed website
+excerpts, reply exactly:
+"No marine sustainability tax incentives or programs discovered for this region
+within the specified data sources."
+
+User request:
+{user_prompt}
+""".strip()
+
+
 def call_gemini(prompt: str, source_context: str) -> str:
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
         raise HTTPException(
             status_code=500,
-            detail="GEMINI_API_KEY is not configured in the backend environment.",
+            detail="GEMINI_API_KEY is not configured in backend/.env.",
         )
 
     model = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
@@ -130,9 +170,9 @@ def call_gemini(prompt: str, source_context: str) -> str:
             "parts": [
                 {
                     "text": (
-                        "Answer the user using only the provided allowed website "
-                        "excerpts. Do not use outside knowledge or invent sources. "
-                        "If the excerpts do not contain enough information, say so."
+                        "Answer only from the allowed website excerpts included "
+                        "in the user message. Do not browse, search, or invent "
+                        "facts. If the excerpts are insufficient, say so."
                     )
                 }
             ]
@@ -143,7 +183,7 @@ def call_gemini(prompt: str, source_context: str) -> str:
                     {
                         "text": (
                             f"Allowed website excerpts:\n{source_context}\n\n"
-                            f"User prompt:\n{prompt}"
+                            f"Research prompt:\n{prompt}"
                         )
                     }
                 ]
@@ -176,33 +216,9 @@ def call_gemini(prompt: str, source_context: str) -> str:
         raise HTTPException(status_code=502, detail="Gemini returned an empty response.")
 
 
-def build_gemini_prompt(payload: GeminiRequest) -> str:
-    return f"""
-Create a concise, practical answer using this fixed template:
-
-Topic:
-{payload.topic}
-
-Target audience:
-{payload.audience}
-
-User goal:
-{payload.goal}
-
-Required output:
-- Start with a short direct answer.
-- Then give 3 to 5 useful bullet points.
-- Keep the language clear for the target audience.
-- Only use information supported by the allowed website excerpts.
-""".strip()
-
-
 load_local_env()
 
-=======
->>>>>>> Stashed changes
-app = FastAPI(title="Hackathon API", version="0.1.0")
-client = genai.Client()
+app = FastAPI(title="Marine Sustainability Tax Research API", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -215,21 +231,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-class EchoRequest(BaseModel):
-    text: str
-
-
-class CompanyResearchRequest(BaseModel):
-    company_name: str
-    industry_type: str
-    zone_of_operating: str
-    address: str
-    parent_company_address: Optional[str] = None
-
 
 @app.get("/")
 def read_root() -> dict[str, str]:
-    return {"message": "Hackathon API is running"}
+    return {"message": "Marine sustainability tax research API is running"}
 
 
 @app.get("/health")
@@ -237,80 +242,24 @@ def health_check() -> dict[str, str]:
     return {"status": "ok"}
 
 
-@app.post("/echo")
-def echo_text(payload: EchoRequest) -> dict[str, str]:
-    return {"text": payload.text}
-
-
-<<<<<<< Updated upstream
 @app.get("/allowed-websites")
 def allowed_websites() -> dict[str, list[str]]:
     return {"websites": ALLOWED_WEBSITES}
 
 
-@app.post("/ask-gemini")
-def ask_gemini(payload: GeminiRequest) -> dict[str, object]:
-    if not payload.topic.strip():
-        raise HTTPException(status_code=400, detail="Topic cannot be empty.")
-    if not payload.audience.strip():
-        raise HTTPException(status_code=400, detail="Audience cannot be empty.")
-    if not payload.goal.strip():
-        raise HTTPException(status_code=400, detail="Goal cannot be empty.")
+@app.post("/api/research")
+def research_tax_incentives(payload: CompanyResearchRequest) -> dict[str, object]:
+    required_fields = {
+        "company_name": payload.company_name,
+        "industry_type": payload.industry_type,
+        "zone_of_operating": payload.zone_of_operating,
+        "address": payload.address,
+    }
+    for field_name, value in required_fields.items():
+        if not value.strip():
+            raise HTTPException(status_code=400, detail=f"{field_name} cannot be empty.")
 
     prompt = build_gemini_prompt(payload)
     source_context, sources = build_source_context()
     answer = call_gemini(prompt, source_context)
     return {"answer": answer, "sources": sources}
-=======
-@app.post("/api/research")
-async def research_tax_incentives(payload: CompanyResearchRequest):
-    # getting the list of sites
-    target_sites = load_target_sites()
-    sites_string = ", ".join(target_sites)
-
-    system_instruction = (
-        f"You are a leading expert in international tax law, green subsidies, and environmental grants. "
-        f"Your task is to identify tax incentives, subsidies, grants, or tax deductions "
-        f"specifically in the field of marine sustainability (blue economy, ocean protection, sustainable aquaculture, eco-shipping) "
-        f"for the provided organization.\n\n"
-        f"SEARCH RULES:\n"
-        f"1. Use the Google Search tool to find up-to-date and reliable information.\n"
-        f"2. Restrict your search STRICTLY to the following websites: {sites_string}.\n"
-        f"3. Focus on the legislation, local/federal policies, and incentives of the country and region where the company operates.\n\n"
-        f"THE OUTPUT MUST CONTAIN:\n"
-        f"- A structured list of available support programs or tax deductions matching the company's industry.\n"
-        f"- Direct references or source links (pointing to specific laws or sections from the allowed domains list), if found.\n"
-        f"- Step-by-step basic eligibility criteria for the company to qualify for these incentives.\n"
-        f"If no specific incentives are found for this region on the allowed websites, reply exactly: "
-        f"'No marine sustainability tax incentives or programs discovered for this region within the specified data sources.'"
-    )
-
-    user_prompt = (
-        f"Analyze the following organization and search for applicable green/marine tax benefits:\n"
-        f"- Organization Name: {payload.company_name}\n"
-        f"- Industry Type: {payload.industry_type}\n"
-        f"- Zone of Operating: {payload.zone_of_operating}\n"
-        f"- Registered Address: {payload.address}\n"
-    )
-
-    if payload.parent_company_address:
-        user_prompt += f"- Note: This is a subsidiary company. Parent company location: {payload.parent_company_address}\n"
-
-    user_prompt += "\nFind applicable tax incentives or grants in marine sustainability for this entity."
-
-    try:
-        # Call Gemini 2.5 Flash with Grounded Google Search enabled
-        response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=user_prompt,
-            config=types.GenerateContentConfig(
-                system_instruction=system_instruction,
-                tools=[types.Tool(google_search=types.GoogleSearch())]
-            )
-        )
-        return {"answer": response.text}
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Gemini API Error: {str(e)}")
-
->>>>>>> Stashed changes

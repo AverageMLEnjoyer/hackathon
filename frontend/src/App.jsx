@@ -4,9 +4,11 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000
 
 export default function App() {
   const [apiStatus, setApiStatus] = useState('Checking...');
-  const [topic, setTopic] = useState('');
-  const [audience, setAudience] = useState('');
-  const [goal, setGoal] = useState('');
+  const [companyName, setCompanyName] = useState('');
+  const [industryType, setIndustryType] = useState('');
+  const [zoneOfOperating, setZoneOfOperating] = useState('');
+  const [address, setAddress] = useState('');
+  const [parentCompanyAddress, setParentCompanyAddress] = useState('');
   const [answer, setAnswer] = useState('');
   const [sources, setSources] = useState([]);
   const [submitStatus, setSubmitStatus] = useState('');
@@ -34,12 +36,18 @@ export default function App() {
     setAnswer('');
 
     try {
-      const response = await fetch(`${API_BASE_URL}/ask-gemini`, {
+      const response = await fetch(`${API_BASE_URL}/api/research`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ topic, audience, goal }),
+        body: JSON.stringify({
+          company_name: companyName,
+          industry_type: industryType,
+          zone_of_operating: zoneOfOperating,
+          address,
+          parent_company_address: parentCompanyAddress || null,
+        }),
       });
 
       if (!response.ok) {
@@ -58,46 +66,73 @@ export default function App() {
   return (
     <main className="app-shell">
       <section className="intro">
-        <p className="eyebrow">Full-stack starter</p>
-        <h1>Gemini Research</h1>
+        <p className="eyebrow">Marine sustainability research</p>
+        <h1>Tax Incentive Finder</h1>
         <p>
-          Fill in the three fields. The backend inserts them into a hardcoded
-          prompt template and sends that prompt to Gemini.
+          Enter company details. The backend inserts them into a hardcoded tax
+          incentive research prompt and sends only approved source excerpts to
+          Gemini.
         </p>
       </section>
 
-      <form className="echo-form" onSubmit={handleSubmit}>
+      <form className="research-form" onSubmit={handleSubmit}>
         <div className="field-grid">
-          <label htmlFor="topic-input">
-            Topic
+          <label htmlFor="company-name-input">
+            Company name
             <input
-              id="topic-input"
+              id="company-name-input"
               type="text"
-              value={topic}
-              onChange={(event) => setTopic(event.target.value)}
-              placeholder="Example: FastAPI routing"
+              value={companyName}
+              onChange={(event) => setCompanyName(event.target.value)}
+              placeholder="Example: OceanTech d.o.o."
+              required
             />
           </label>
 
-          <label htmlFor="audience-input">
-            Audience
+          <label htmlFor="industry-type-input">
+            Industry type
             <input
-              id="audience-input"
+              id="industry-type-input"
               type="text"
-              value={audience}
-              onChange={(event) => setAudience(event.target.value)}
-              placeholder="Example: beginner developers"
+              value={industryType}
+              onChange={(event) => setIndustryType(event.target.value)}
+              placeholder="Example: sustainable aquaculture"
+              required
             />
           </label>
 
-          <label htmlFor="goal-input">
-            Goal
+          <label htmlFor="zone-input">
+            Zone of operating
             <input
-              id="goal-input"
+              id="zone-input"
               type="text"
-              value={goal}
-              onChange={(event) => setGoal(event.target.value)}
-              placeholder="Example: explain how to add one endpoint"
+              value={zoneOfOperating}
+              onChange={(event) => setZoneOfOperating(event.target.value)}
+              placeholder="Example: Slovenia and EU"
+              required
+            />
+          </label>
+
+          <label htmlFor="address-input">
+            Registered address
+            <input
+              id="address-input"
+              type="text"
+              value={address}
+              onChange={(event) => setAddress(event.target.value)}
+              placeholder="Example: Ljubljana, Slovenia"
+              required
+            />
+          </label>
+
+          <label htmlFor="parent-address-input">
+            Parent company address
+            <input
+              id="parent-address-input"
+              type="text"
+              value={parentCompanyAddress}
+              onChange={(event) => setParentCompanyAddress(event.target.value)}
+              placeholder="Optional"
             />
           </label>
         </div>

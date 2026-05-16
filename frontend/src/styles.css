@@ -63,13 +63,13 @@ h1 {
   font-size: 1.1rem;
 }
 
-.echo-form {
+.research-form {
   display: grid;
   gap: 16px;
   width: min(620px, 100%);
 }
 
-.echo-form label {
+.research-form label {
   display: grid;
   gap: 8px;
   color: #344245;
@@ -97,7 +97,7 @@ h1 {
   outline: none;
 }
 
-.echo-form button {
+.research-form button {
   width: fit-content;
   min-width: 120px;
   padding: 14px 18px;
@@ -109,7 +109,7 @@ h1 {
   cursor: pointer;
 }
 
-.echo-form button:hover {
+.research-form button:hover {
   background: #185d49;
 }
 
