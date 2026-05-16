@@ -272,7 +272,6 @@ def research_tax_incentives(payload: CompanyResearchRequest) -> dict[str, object
             raise HTTPException(status_code=400, detail=f"{field_name} cannot be empty.")
 
     prompt = build_gemini_prompt(payload)
-    print(prompt)
     source_context, sources = build_source_context()
     answer = call_gemini(prompt, source_context)
     return {"answer": answer, "sources": sources}
