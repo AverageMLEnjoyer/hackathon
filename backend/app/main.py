@@ -16,6 +16,8 @@ from .load_sites import load_target_sites
 
 ALLOWED_WEBSITES = load_target_sites()
 MAX_SITE_CHARS = 6000
+DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
+DEFAULT_GEMINI_TIMEOUT_SECONDS = 60
 
 
 class CompanyResearchRequest(BaseModel):
@@ -95,7 +97,6 @@ def fetch_allowed_website(url: str) -> dict[str, str]:
 
     return {"url": url, "content": extract_text_from_html(html)[:MAX_SITE_CHARS]}
 
-
 def safe_fetch_allowed_website(url: str) -> dict[str, str]:
     try:
         return fetch_allowed_website(url)
@@ -163,15 +164,39 @@ User request:
 """.strip()
 
 
-def call_gemini(prompt: str, source_context: str) -> str:
+def get_gemini_timeout() -> int:
+    configured_timeout = os.environ.get("GEMINI_TIMEOUT_SECONDS")
+    if not configured_timeout:
+        return DEFAULT_GEMINI_TIMEOUT_SECONDS
+
+    try:
+        return int(configured_timeout)
+    except ValueError:
+        return DEFAULT_GEMINI_TIMEOUT_SECONDS
+
+
+def get_gemini_model_id() -> str:
+    model = os.environ.get("GEMINI_MODEL", DEFAULT_GEMINI_MODEL).strip()
+    if not model:
+        return DEFAULT_GEMINI_MODEL
+    if model.startswith("models/"):
+        return model.removeprefix("models/")
+    return model
+
+
+def get_gemini_api_key() -> str:
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
         raise HTTPException(
             status_code=500,
             detail="GEMINI_API_KEY is not configured in backend/.env.",
         )
+    return api_key
 
-    model = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+def call_gemini(prompt: str, source_context: str) -> str:
+    api_key = get_gemini_api_key()
+    model = get_gemini_model_id()
+    timeout = get_gemini_timeout()
     endpoint = (
         f"https://generativelanguage.googleapis.com/v1beta/models/"
         f"{model}:generateContent"
@@ -191,6 +216,7 @@ def call_gemini(prompt: str, source_context: str) -> str:
         },
         "contents": [
             {
+                "role": "user",
                 "parts": [
                     {
                         "text": (
@@ -201,6 +227,11 @@ def call_gemini(prompt: str, source_context: str) -> str:
                 ]
             }
         ],
+        "generationConfig": {
+            "temperature": 0.2,
+            "topP": 0.9,
+            "maxOutputTokens": 2048,
+        },
     }
 
     request = Request(
@@ -214,7 +245,7 @@ def call_gemini(prompt: str, source_context: str) -> str:
     )
 
     try:
-        with urlopen(request, timeout=30) as response:
+        with urlopen(request, timeout=timeout) as response:
             data = json.loads(response.read().decode("utf-8"))
     except HTTPError as error:
         detail = error.read().decode("utf-8", errors="ignore")
@@ -222,12 +253,49 @@ def call_gemini(prompt: str, source_context: str) -> str:
     except (URLError, TimeoutError) as error:
         raise HTTPException(status_code=502, detail=f"Could not reach Gemini: {error}")
 
-    try:
-        return data["candidates"][0]["content"]["parts"][0]["text"]
-    except (KeyError, IndexError):
-        raise HTTPException(status_code=502, detail="Gemini returned an empty response.")
+    return extract_gemini_text(data)
 
 
+def extract_gemini_text(data: dict[str, object]) -> str:
+    candidates = data.get("candidates")
+    if not isinstance(candidates, list) or not candidates:
+        prompt_feedback = data.get("promptFeedback")
+        raise HTTPException(
+            status_code=502,
+            detail=f"Gemini returned no candidates. Prompt feedback: {prompt_feedback}",
+        )
+
+    candidate = candidates[0]
+    if not isinstance(candidate, dict):
+        raise HTTPException(
+            status_code=502,
+            detail="Gemini returned a malformed candidate.",
+        )
+
+    content = candidate.get("content")
+    parts = content.get("parts") if isinstance(content, dict) else None
+    text_parts = [
+        part["text"].strip()
+        for part in parts or []
+        if (
+            isinstance(part, dict)
+            and isinstance(part.get("text"), str)
+            and part["text"].strip()
+        )
+    ]
+
+    if text_parts:
+        return "\n".join(text_parts)
+
+    finish_reason = candidate.get("finishReason")
+    safety_ratings = candidate.get("safetyRatings")
+    raise HTTPException(
+        status_code=502,
+        detail=(
+            "Gemini returned no text. "
+            f"finishReason={finish_reason}, safetyRatings={safety_ratings}"
+        ),
+    )
 load_local_env()
 
 app = FastAPI(title="Marine Sustainability Tax Research API", version="0.1.0")
@@ -271,6 +339,7 @@ def research_tax_incentives(payload: CompanyResearchRequest) -> dict[str, object
         if not value.strip():
             raise HTTPException(status_code=400, detail=f"{field_name} cannot be empty.")
 
+    get_gemini_api_key()
     prompt = build_gemini_prompt(payload)
     print(prompt)
     source_context, sources = build_source_context()
