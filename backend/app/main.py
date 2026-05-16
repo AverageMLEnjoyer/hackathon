@@ -1,3 +1,4 @@
+<<<<<<< Updated upstream
 import json
 import os
 import re
@@ -7,11 +8,18 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
+=======
+>>>>>>> Stashed changes
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from typing import Optional
+from google import genai
+from google.genai import types
+from load_sites import load_target_sites
 
 
+<<<<<<< Updated upstream
 class EchoRequest(BaseModel):
     text: str
 
@@ -191,7 +199,10 @@ Required output:
 
 load_local_env()
 
+=======
+>>>>>>> Stashed changes
 app = FastAPI(title="Hackathon API", version="0.1.0")
+client = genai.Client()
 
 app.add_middleware(
     CORSMiddleware,
@@ -203,6 +214,17 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+class EchoRequest(BaseModel):
+    text: str
+
+
+class CompanyResearchRequest(BaseModel):
+    company_name: str
+    industry_type: str
+    zone_of_operating: str
+    address: str
+    parent_company_address: Optional[str] = None
 
 
 @app.get("/")
@@ -220,6 +242,7 @@ def echo_text(payload: EchoRequest) -> dict[str, str]:
     return {"text": payload.text}
 
 
+<<<<<<< Updated upstream
 @app.get("/allowed-websites")
 def allowed_websites() -> dict[str, list[str]]:
     return {"websites": ALLOWED_WEBSITES}
@@ -238,3 +261,56 @@ def ask_gemini(payload: GeminiRequest) -> dict[str, object]:
     source_context, sources = build_source_context()
     answer = call_gemini(prompt, source_context)
     return {"answer": answer, "sources": sources}
+=======
+@app.post("/api/research")
+async def research_tax_incentives(payload: CompanyResearchRequest):
+    # getting the list of sites
+    target_sites = load_target_sites()
+    sites_string = ", ".join(target_sites)
+
+    system_instruction = (
+        f"You are a leading expert in international tax law, green subsidies, and environmental grants. "
+        f"Your task is to identify tax incentives, subsidies, grants, or tax deductions "
+        f"specifically in the field of marine sustainability (blue economy, ocean protection, sustainable aquaculture, eco-shipping) "
+        f"for the provided organization.\n\n"
+        f"SEARCH RULES:\n"
+        f"1. Use the Google Search tool to find up-to-date and reliable information.\n"
+        f"2. Restrict your search STRICTLY to the following websites: {sites_string}.\n"
+        f"3. Focus on the legislation, local/federal policies, and incentives of the country and region where the company operates.\n\n"
+        f"THE OUTPUT MUST CONTAIN:\n"
+        f"- A structured list of available support programs or tax deductions matching the company's industry.\n"
+        f"- Direct references or source links (pointing to specific laws or sections from the allowed domains list), if found.\n"
+        f"- Step-by-step basic eligibility criteria for the company to qualify for these incentives.\n"
+        f"If no specific incentives are found for this region on the allowed websites, reply exactly: "
+        f"'No marine sustainability tax incentives or programs discovered for this region within the specified data sources.'"
+    )
+
+    user_prompt = (
+        f"Analyze the following organization and search for applicable green/marine tax benefits:\n"
+        f"- Organization Name: {payload.company_name}\n"
+        f"- Industry Type: {payload.industry_type}\n"
+        f"- Zone of Operating: {payload.zone_of_operating}\n"
+        f"- Registered Address: {payload.address}\n"
+    )
+
+    if payload.parent_company_address:
+        user_prompt += f"- Note: This is a subsidiary company. Parent company location: {payload.parent_company_address}\n"
+
+    user_prompt += "\nFind applicable tax incentives or grants in marine sustainability for this entity."
+
+    try:
+        # Call Gemini 2.5 Flash with Grounded Google Search enabled
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=user_prompt,
+            config=types.GenerateContentConfig(
+                system_instruction=system_instruction,
+                tools=[types.Tool(google_search=types.GoogleSearch())]
+            )
+        )
+        return {"answer": response.text}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Gemini API Error: {str(e)}")
+
+>>>>>>> Stashed changes
