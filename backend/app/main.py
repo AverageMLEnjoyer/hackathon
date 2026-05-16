@@ -1,5 +1,10 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+
+
+class EchoRequest(BaseModel):
+    text: str
 
 app = FastAPI(title="Hackathon API", version="0.1.0")
 
@@ -23,3 +28,8 @@ def read_root() -> dict[str, str]:
 @app.get("/health")
 def health_check() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.post("/echo")
+def echo_text(payload: EchoRequest) -> dict[str, str]:
+    return {"text": payload.text}

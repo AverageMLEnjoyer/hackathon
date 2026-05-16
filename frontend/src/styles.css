@@ -63,6 +63,55 @@ h1 {
   font-size: 1.1rem;
 }
 
+.echo-form {
+  display: grid;
+  gap: 10px;
+  width: min(620px, 100%);
+}
+
+.echo-form label {
+  color: #344245;
+  font-weight: 700;
+}
+
+.input-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+}
+
+.input-row input {
+  width: 100%;
+  min-width: 0;
+  padding: 14px 16px;
+  color: #172026;
+  border: 1px solid #cfd8d4;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.input-row input:focus {
+  border-color: #23735a;
+  box-shadow: 0 0 0 3px rgb(35 115 90 / 16%);
+  outline: none;
+}
+
+.input-row button {
+  min-width: 96px;
+  padding: 14px 18px;
+  color: #ffffff;
+  font-weight: 700;
+  border: 0;
+  border-radius: 8px;
+  background: #23735a;
+  cursor: pointer;
+}
+
+.input-row button:hover {
+  background: #185d49;
+}
+
+.response-panel,
 .status-panel {
   display: flex;
   align-items: center;
@@ -76,15 +125,28 @@ h1 {
   box-shadow: 0 12px 40px rgb(23 32 38 / 8%);
 }
 
+.response-panel {
+  flex-direction: column;
+  align-items: flex-start;
+  width: min(620px, 100%);
+}
+
+.response-panel span,
 .status-panel span {
   color: #5a6466;
 }
 
+.response-panel strong,
 .status-panel strong {
   color: #1f6f4a;
+  overflow-wrap: anywhere;
 }
 
 @media (max-width: 560px) {
+  .input-row {
+    grid-template-columns: 1fr;
+  }
+
   .status-panel {
     align-items: flex-start;
     flex-direction: column;
