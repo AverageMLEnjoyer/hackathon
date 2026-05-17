@@ -1,57 +1,7 @@
-/**
- * GLOBAL APPLICATION CONTEXT
- *
- * This file manages global application state including:
- * - User authentication and session
- * - Login modal visibility
- * - Saved projects/bookmarks
- *
- * CRITICAL BACKEND INTEGRATION POINTS:
- * =====================================================
- *
- * 1. USER AUTHENTICATION:
- *    - Replace mockUser with real user data from your backend
- *    - Implement JWT token storage in localStorage/cookies
- *    - Add token refresh logic
- *    - Verify session on app load
- *
- * 2. LOGIN FLOW:
- *    - login() function should call POST /api/auth/login
- *    - Store returned JWT token
- *    - Fetch and set user profile data
- *
- * 3. LOGOUT FLOW:
- *    - logout() should call POST /api/auth/logout
- *    - Clear stored tokens
- *    - Redirect to homepage
- *
- * 4. SAVED PROJECTS:
- *    - toggleSaveProject() should call POST /api/bookmarks/toggle
- *    - Load user's bookmarks on login from GET /api/bookmarks/:userId
- *    - Persist changes to backend
- *
- * 5. SESSION PERSISTENCE:
- *    - Check for stored auth token on app initialization
- *    - Validate token with backend
- *    - Auto-login if valid token exists
- */
+import { createContext, useContext, useState, useEffect} from 'react';
 
-import { createContext, useContext, useState } from 'react';
+const API_BASE_URL = 'http://localhost:8000';
 
-/**
- * USER DATA STRUCTURE
- *
- * Represents an authenticated user in the system.
- *
- * BACKEND: This should match the user object returned from your API.
- * You may need to add additional fields like:
- * - id: string (user ID from database)
- * - role: string (user role/permissions)
- * - companyId: string (organization identifier)
- * - subscription: string (subscription tier)
- * - createdAt: Date
- * - lastLogin: Date
- */
 export interface User {
   name: string;          // Full name (e.g., "Marko Novak")
   firstName: string;     // First name only
@@ -63,12 +13,6 @@ export interface User {
   zones: string[];       // Operational zones (e.g., ["Adriatic Sea"])
 }
 
-/**
- * CONTEXT TYPE DEFINITION
- *
- * Defines all the values and functions available through the context.
- * Any component can access these by using the useApp() hook.
- */
 interface AppContextType {
   user: User | null;                    // Current authenticated user (null if not logged in)
   isLoginModalOpen: boolean;            // Login modal visibility state
@@ -78,17 +22,27 @@ interface AppContextType {
   logout: () => void;                   // Handle user logout (NEEDS BACKEND IMPLEMENTATION)
   savedProjects: string[];              // Array of saved project IDs
   toggleSaveProject: (id: string) => void;  // Add/remove project from saved list (NEEDS BACKEND)
+
+  apiStatus: string;
+  companyName: string;
+  setCompanyName: (val: string) => void;
+  industryType: string;
+  setIndustryType: (val: string) => void;
+  zoneOfOperating: string;
+  setZoneOfOperating: (val: string) => void;
+  address: string;
+  setAddress: (val: string) => void;
+  parentCompanyAddress: string;
+  setParentCompanyAddress: (val: string) => void;
+  answer: string;
+  sources: string[];
+  submitStatus: string;
+  handleSubmit: (event: React.FormEvent) => Promise<void>;
 }
 
 // Create the context with an empty default value
 const AppContext = createContext<AppContextType>({} as AppContextType);
 
-/**
- * MOCK USER DATA
- *
- * BACKEND TODO: REMOVE THIS - This is placeholder data for development.
- * Replace with actual user data from your authentication API.
- */
 const mockUser: User = {
   name: 'Marko Novak',
   firstName: 'Marko',
@@ -100,54 +54,9 @@ const mockUser: User = {
   zones: ['Adriatic Sea', 'Mediterranean'],
 };
 
-/**
- * APP PROVIDER COMPONENT
- *
- * Wraps the entire application and provides global state to all child components.
- *
- * BACKEND INTEGRATION STEPS:
- * =========================
- *
- * 1. On mount, check for stored auth token:
- *    useEffect(() => {
- *      const token = localStorage.getItem('authToken');
- *      if (token) {
- *        // Validate token with backend and fetch user data
- *        validateAndLoadUser(token);
- *      }
- *    }, []);
- *
- * 2. Replace login() with actual API call:
- *    const login = async (email: string, password: string) => {
- *      const response = await fetch('/api/auth/login', {
- *        method: 'POST',
- *        body: JSON.stringify({ email, password }),
- *      });
- *      const { token, user } = await response.json();
- *      localStorage.setItem('authToken', token);
- *      setUser(user);
- *      setIsLoginModalOpen(false);
- *    };
- *
- * 3. Replace logout() with API call:
- *    const logout = async () => {
- *      await fetch('/api/auth/logout', { method: 'POST' });
- *      localStorage.removeItem('authToken');
- *      setUser(null);
- *      // Optionally redirect to homepage
- *    };
- *
- * 4. Replace toggleSaveProject() with API call:
- *    const toggleSaveProject = async (id: string) => {
- *      await fetch('/api/bookmarks/toggle', {
- *        method: 'POST',
- *        body: JSON.stringify({ projectId: id }),
- *      });
- *      setSavedProjects(prev =>
- *        prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id]
- *      );
- *    };
- */
+
+
+
 export function AppProvider({ children }: { children: React.ReactNode }) {
   // User authentication state (null = not logged in)
   const [user, setUser] = useState<User | null>(null);
@@ -159,15 +68,59 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // BACKEND TODO: Load this from GET /api/bookmarks/:userId when user logs in
   const [savedProjects, setSavedProjects] = useState<string[]>(['1', '3']);
 
-  /**
-   * TOGGLE SAVE PROJECT
-   *
-   * Adds or removes a project from the user's saved list.
-   *
-   * BACKEND TODO: Replace with API call to persist bookmark state
-   * POST /api/bookmarks/toggle
-   * Body: { projectId: string, userId: string }
-   */
+ const [apiStatus, setApiStatus] = useState<string>('Checking...');
+  const [companyName, setCompanyName] = useState<string>('');
+  const [industryType, setIndustryType] = useState<string>('');
+  const [zoneOfOperating, setZoneOfOperating] = useState<string>('');
+  const [address, setAddress] = useState<string>('');
+  const [parentCompanyAddress, setParentCompanyAddress] = useState<string>('');
+  const [answer, setAnswer] = useState<string>('');
+  const [sources, setSources] = useState<string[]>([]);
+  const [submitStatus, setSubmitStatus] = useState<string>('');
+
+  useEffect(() => {
+    fetch(`${API_BASE_URL}/health`)
+      .then((res) => res.json())
+      .then((data) => setApiStatus(data.status || 'Connected'))
+      .catch(() => setApiStatus('Backend offline'));
+  }, []);
+
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setSubmitStatus('Asking Gemini...');
+    setAnswer('');
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/research`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          company_name: companyName,
+          industry_type: industryType,
+          zone_of_operating: zoneOfOperating,
+          address: address,
+          parent_company_address: parentCompanyAddress || null, // Отправляем null, если строка пустая
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Network response was not ok');
+      }
+
+      const data = await response.json();
+
+      setAnswer(data.answer);
+      setSources(data.sources || []);
+      setSubmitStatus('Analysis Complete');
+    } catch (error) {
+      console.error('API Error:', error);
+      setSubmitStatus('Could not get a Gemini response. Check backend terminal.');
+    }
+  };
+
   const toggleSaveProject = (id: string) => {
     setSavedProjects(prev =>
       prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id]
@@ -182,60 +135,29 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         openLoginModal: () => setIsLoginModalOpen(true),
         closeLoginModal: () => setIsLoginModalOpen(false),
 
-        /**
-         * LOGIN FUNCTION
-         *
-         * BACKEND TODO: Replace this mock implementation with real authentication
-         *
-         * Current behavior: Sets user to mockUser
-         * Required behavior:
-         * 1. Accept email and password as parameters
-         * 2. Call POST /api/auth/login
-         * 3. Store JWT token in localStorage
-         * 4. Fetch and set user data
-         * 5. Handle errors (wrong password, network issues, etc.)
-         *
-         * Example implementation:
-         * login: async (email: string, password: string) => {
-         *   try {
-         *     const response = await fetch('/api/auth/login', {
-         *       method: 'POST',
-         *       headers: { 'Content-Type': 'application/json' },
-         *       body: JSON.stringify({ email, password }),
-         *     });
-         *     if (!response.ok) throw new Error('Login failed');
-         *     const { token, user } = await response.json();
-         *     localStorage.setItem('authToken', token);
-         *     setUser(user);
-         *     setIsLoginModalOpen(false);
-         *   } catch (error) {
-         *     console.error('Login error:', error);
-         *     // Show error message to user
-         *   }
-         * }
-         */
         login: () => {
           setUser(mockUser);
           setIsLoginModalOpen(false);
         },
-
-        /**
-         * LOGOUT FUNCTION
-         *
-         * BACKEND TODO: Replace with real logout implementation
-         *
-         * Current behavior: Clears user state
-         * Required behavior:
-         * 1. Call POST /api/auth/logout to invalidate token
-         * 2. Remove token from localStorage
-         * 3. Clear user state
-         * 4. Clear saved projects
-         * 5. Redirect to homepage
-         */
         logout: () => setUser(null),
-
         savedProjects,
         toggleSaveProject,
+
+        apiStatus,
+        companyName,
+        setCompanyName,
+        industryType,
+        setIndustryType,
+        zoneOfOperating,
+        setZoneOfOperating,
+        address,
+        setAddress,
+        parentCompanyAddress,
+        setParentCompanyAddress,
+        answer,
+        sources,
+        submitStatus,
+        handleSubmit,
       }}
     >
       {children}
@@ -243,16 +165,4 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
-/**
- * CUSTOM HOOK TO ACCESS APP CONTEXT
- *
- * Use this hook in any component to access global state and functions.
- *
- * Example usage:
- * const { user, login, logout, savedProjects } = useApp();
- *
- * if (!user) {
- *   // User not logged in
- * }
- */
 export const useApp = () => useContext(AppContext);
