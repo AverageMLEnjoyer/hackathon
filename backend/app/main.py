@@ -15,7 +15,7 @@ from .load_sites import load_target_sites
 
 
 ALLOWED_WEBSITES = load_target_sites()
-MAX_SITE_CHARS = 6000
+MAX_SITE_CHARS = 25000
 DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
 DEFAULT_GEMINI_TIMEOUT_SECONDS = 60
 
@@ -147,6 +147,12 @@ Search rules:
    allowed websites list.
 3. Focus on legislation, local/federal policies, and incentives of the country
    and region where the company operates.
+   
+CRITICAL TEXT FORMATTING RULES:
+- DO NOT USE markdown formatting. Never use asterisks (like **text** or *text*) for bolding or lists.
+- For sections and subtitles, write them in plain UPPERCASE text.
+- Use regular numbers (1, 2, 3) and simple dashes (-) for bullet points.
+- Provide full, comprehensive explanations for each incentive. Do not truncate, abbreviate, or summarize heavily. Give as much actionable legal data as found.
 
 The output must contain:
 - A structured list of available support programs or tax deductions matching the
@@ -230,7 +236,7 @@ def call_gemini(prompt: str, source_context: str) -> str:
         "generationConfig": {
             "temperature": 0.2,
             "topP": 0.9,
-            "maxOutputTokens": 2048,
+            "maxOutputTokens": 8192,
         },
     }
 

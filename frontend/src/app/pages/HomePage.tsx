@@ -298,7 +298,7 @@ export function HomePage() {
               borderLeft: '4px solid #1B7A8A',
             }}
           >
-            <h2 className="font-display" style={{ fontSize: 24, fontWeight: 400, color: '#0A3D62', margin: '0 0 16px' }}>
+            <h2 className="font-display" style={{ fontSize: 24, fontWeight: 400, color: '#0A3D62', margin: '0 0 16px', }}>
               {submitStatus || 'Tax Incentive & Intelligence Report'}
             </h2>
 
