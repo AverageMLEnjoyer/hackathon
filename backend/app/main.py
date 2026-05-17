@@ -18,19 +18,7 @@ ALLOWED_WEBSITES = load_target_sites()
 MAX_SITE_CHARS = 6000
 DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
 DEFAULT_GEMINI_TIMEOUT_SECONDS = 60
-DEFAULT_CORS_ORIGINS = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-]
-LOCAL_NETWORK_ORIGIN_REGEX = (
-    r"^https?://("
-    r"localhost|"
-    r"127\.0\.0\.1|"
-    r"10\.\d{1,3}\.\d{1,3}\.\d{1,3}|"
-    r"192\.168\.\d{1,3}\.\d{1,3}|"
-    r"172\.(?:1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}"
-    r")(?::\d+)?$"
-)
+
 
 class CompanyResearchRequest(BaseModel):
     company_name: str
@@ -72,16 +60,6 @@ def load_local_env() -> None:
         os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
 
 
-def get_cors_origins() -> list[str]:
-    configured_origins = os.environ.get("BACKEND_CORS_ORIGINS", "")
-    extra_origins = [
-        origin.strip()
-        for origin in configured_origins.split(",")
-        if origin.strip()
-    ]
-    return [*DEFAULT_CORS_ORIGINS, *extra_origins]
-
-
 def extract_text_from_html(html: str) -> str:
     parser = TextExtractor()
     parser.feed(html)
@@ -118,6 +96,7 @@ def fetch_allowed_website(url: str) -> dict[str, str]:
         return {"url": url, "content": f"Could not fetch this source: {error}"}
 
     return {"url": url, "content": extract_text_from_html(html)[:MAX_SITE_CHARS]}
+
 def safe_fetch_allowed_website(url: str) -> dict[str, str]:
     try:
         return fetch_allowed_website(url)
@@ -184,6 +163,7 @@ User request:
 {user_prompt}
 """.strip()
 
+
 def get_gemini_timeout() -> int:
     configured_timeout = os.environ.get("GEMINI_TIMEOUT_SECONDS")
     if not configured_timeout:
@@ -212,7 +192,6 @@ def get_gemini_api_key() -> str:
             detail="GEMINI_API_KEY is not configured in backend/.env.",
         )
     return api_key
-
 
 def call_gemini(prompt: str, source_context: str) -> str:
     api_key = get_gemini_api_key()
@@ -276,6 +255,7 @@ def call_gemini(prompt: str, source_context: str) -> str:
 
     return extract_gemini_text(data)
 
+
 def extract_gemini_text(data: dict[str, object]) -> str:
     candidates = data.get("candidates")
     if not isinstance(candidates, list) or not candidates:
@@ -316,20 +296,21 @@ def extract_gemini_text(data: dict[str, object]) -> str:
             f"finishReason={finish_reason}, safetyRatings={safety_ratings}"
         ),
     )
-
-
 load_local_env()
 
 app = FastAPI(title="Marine Sustainability Tax Research API", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=get_cors_origins(),
-    allow_origin_regex=LOCAL_NETWORK_ORIGIN_REGEX,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 @app.get("/")
 def read_root() -> dict[str, str]:
@@ -360,6 +341,7 @@ def research_tax_incentives(payload: CompanyResearchRequest) -> dict[str, object
 
     get_gemini_api_key()
     prompt = build_gemini_prompt(payload)
+    print(prompt)
     source_context, sources = build_source_context()
     answer = call_gemini(prompt, source_context)
     return {"answer": answer, "sources": sources}
